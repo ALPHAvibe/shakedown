@@ -14,6 +14,8 @@ const (
 	DefaultNamespace = "default"
 	DefaultTaskQueue = "shakedown"
 	DefaultUI        = "http://localhost:8233"
+	DefaultTailLines = 200
+	MaxTailLines     = 2000
 )
 
 // Config is process configuration. Model profiles point at any
@@ -26,6 +28,7 @@ type Config struct {
 	Supervisor   SupervisorConfig        `yaml:"supervisor"`
 	Runner       RunnerConfig            `yaml:"runner"`
 	Report       ReportConfig            `yaml:"report"`
+	Logs         LogsConfig              `yaml:"logs"`
 	ArtifactsDir string                  `yaml:"artifacts_dir"`
 }
 
@@ -90,6 +93,12 @@ type ReportConfig struct {
 	Sinks []SinkConfig `yaml:"sinks"`
 }
 
+// LogsConfig controls how much of a captured stream is shown to a model.
+// The artifact file keeps the whole capture.
+type LogsConfig struct {
+	TailLines int `yaml:"tail_lines"`
+}
+
 type SinkConfig struct {
 	Kind       string `yaml:"kind"`
 	WebhookEnv string `yaml:"webhook_env"`
@@ -105,6 +114,7 @@ type fileConfig struct {
 	Supervisor   fileSupervisor       `yaml:"supervisor"`
 	Runner       RunnerConfig         `yaml:"runner"`
 	Report       ReportConfig         `yaml:"report"`
+	Logs         LogsConfig           `yaml:"logs"`
 	ArtifactsDir string               `yaml:"artifacts_dir"`
 }
 
@@ -179,6 +189,7 @@ func Default() Config {
 		},
 		Runner:       RunnerConfig{Kind: "local"},
 		Report:       ReportConfig{Dir: "reports"},
+		Logs:         LogsConfig{TailLines: DefaultTailLines},
 		ArtifactsDir: "artifacts",
 	}
 }
@@ -320,6 +331,9 @@ func applyFile(cfg *Config, raw []byte) error {
 	}
 	if file.ArtifactsDir != "" {
 		cfg.ArtifactsDir = file.ArtifactsDir
+	}
+	if file.Logs.TailLines > 0 {
+		cfg.Logs.TailLines = file.Logs.TailLines
 	}
 	return nil
 }
@@ -534,6 +548,12 @@ func (cfg *Config) normalize() error {
 	}
 	if cfg.ArtifactsDir == "" {
 		cfg.ArtifactsDir = "artifacts"
+	}
+	if cfg.Logs.TailLines == 0 {
+		cfg.Logs.TailLines = DefaultTailLines
+	}
+	if cfg.Logs.TailLines < 0 || cfg.Logs.TailLines > MaxTailLines {
+		return fmt.Errorf("logs.tail_lines must be between 1 and %d", MaxTailLines)
 	}
 	return nil
 }

@@ -38,6 +38,7 @@ type Execution struct {
 	OnFail     string         `json:"on_fail,omitempty" yaml:"on_fail"`
 	OnFailBody string         `json:"on_fail_body,omitempty" yaml:"-"`
 	Tools      []string       `json:"tools,omitempty" yaml:"tools"`
+	Logs       []LogSource    `json:"logs,omitempty" yaml:"logs"`
 	Outputs    map[string]any `json:"outputs,omitempty" yaml:"outputs"`
 	Required   bool           `json:"required,omitempty" yaml:"required"`
 	Timeout    time.Duration  `json:"timeout" yaml:"-"`
@@ -45,6 +46,15 @@ type Execution struct {
 	Area       string         `json:"area,omitempty" yaml:"area"`
 	Start      bool           `json:"start,omitempty" yaml:"start"`
 	Terminal   bool           `json:"terminal,omitempty" yaml:"terminal"`
+}
+
+// LogSource is a stream copied into an artifact file for the life of one execution.
+// Set Run to a command, or Path to a file. Cursor can tail the artifact directly.
+type LogSource struct {
+	Name      string `json:"name" yaml:"name"`
+	Run       string `json:"run,omitempty" yaml:"run"`
+	Path      string `json:"path,omitempty" yaml:"path"`
+	TailLines int    `json:"tail_lines,omitempty" yaml:"tail_lines"`
 }
 
 type Edge struct {
@@ -124,6 +134,7 @@ type fileExecution struct {
 	Prompt   string         `yaml:"prompt"`
 	OnFail   string         `yaml:"on_fail"`
 	Tools    []string       `yaml:"tools"`
+	Logs     []LogSource    `yaml:"logs"`
 	Outputs  map[string]any `yaml:"outputs"`
 	Required bool           `yaml:"required"`
 	Timeout  string         `yaml:"timeout"`
@@ -257,6 +268,7 @@ func convertExecution(dir string, ex fileExecution) (Execution, error) {
 		Prompt:   ex.Prompt,
 		OnFail:   ex.OnFail,
 		Tools:    append([]string{}, ex.Tools...),
+		Logs:     append([]LogSource{}, ex.Logs...),
 		Outputs:  ex.Outputs,
 		Required: ex.Required,
 		Next:     append([]Edge{}, ex.Next...),
@@ -327,6 +339,12 @@ func (g Graph) Validate() error {
 		if len(ex.Tools) > 0 && ex.Prompt == "" && ex.OnFail == "" {
 			return fmt.Errorf("execution %s lists tools without a prompt or on_fail", ex.ID)
 		}
+		seenLogs := map[string]bool{}
+		for _, src := range ex.Logs {
+			if err := validateLog(ex.ID, src, seenLogs); err != nil {
+				return err
+			}
+		}
 		for _, edge := range ex.Next {
 			if edge.To == "" {
 				return fmt.Errorf("execution %s has an edge with an empty target", ex.ID)
@@ -372,6 +390,42 @@ func (g Graph) Validate() error {
 		}
 	}
 	return nil
+}
+
+func validateLog(execution string, src LogSource, seen map[string]bool) error {
+	if src.Name == "" {
+		return fmt.Errorf("execution %s has a log source without a name", execution)
+	}
+	if !validLogName(src.Name) {
+		return fmt.Errorf("execution %s log %q must be letters, digits, hyphens, or underscores", execution, src.Name)
+	}
+	if seen[src.Name] {
+		return fmt.Errorf("execution %s has duplicate log %q", execution, src.Name)
+	}
+	seen[src.Name] = true
+	hasRun := strings.TrimSpace(src.Run) != ""
+	hasPath := strings.TrimSpace(src.Path) != ""
+	if hasRun == hasPath {
+		return fmt.Errorf("execution %s log %s needs a run command or a path", execution, src.Name)
+	}
+	if src.TailLines < 0 {
+		return fmt.Errorf("execution %s log %s tail_lines must be positive", execution, src.Name)
+	}
+	return nil
+}
+
+func validLogName(name string) bool {
+	if name == "" || len(name) > 64 {
+		return false
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // StartID is the execution the run begins at.

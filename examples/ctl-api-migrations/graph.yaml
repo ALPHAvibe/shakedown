@@ -21,6 +21,13 @@ executions:
       - to: run-migrations
   - id: run-migrations
     area: migrations
+    # Streams are copied to artifacts/<run-id>/run-migrations/<name>.log while
+    # this execution runs. Point run at a command or path at a file.
+    # logs:
+    #   - name: database
+    #     run: kubectl logs -f deployment/db
+    #   - name: migration
+    #     path: /var/log/migration.log
     run:
       - scripts/reset-db.sh
       - scripts/migrate.sh {{ inputs.ref }}

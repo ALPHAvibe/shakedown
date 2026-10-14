@@ -1,6 +1,8 @@
 package graph
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -85,6 +87,27 @@ func TestLoadExamples(t *testing.T) {
 	}
 	if !node.IsTerminal() {
 		t.Fatal("api-explore should be terminal")
+	}
+}
+
+func TestLogSourceValidation(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "graph.yaml")
+	body := []byte(`
+name: logs
+executions:
+  - id: step
+    run: echo ok
+    logs:
+      - name: both
+        run: echo a
+        path: app.log
+`)
+	if err := os.WriteFile(path, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected log source validation to fail")
 	}
 }
 

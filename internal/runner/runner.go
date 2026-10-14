@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/ALPHAvibe/shakedown/internal/config"
 	"github.com/ALPHAvibe/shakedown/internal/run"
@@ -128,6 +130,56 @@ func dockerExecArgs(ws run.Workspace, env []string, command []string) []string {
 	}
 	args = append(args, ws.ContainerName)
 	return append(args, command...)
+}
+
+// StreamShell runs a command on the host and copies stdout and stderr to w
+// until the command exits or ctx is cancelled.
+func StreamShell(ctx context.Context, dir, command string, env []string, w io.Writer) error {
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd.Dir = dir
+	if len(env) > 0 {
+		cmd.Env = env
+	}
+	configureCmd(cmd)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	out := &lockedWriter{w: w}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(out, stdout)
+	}()
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(out, stderr)
+	}()
+	waitErr := cmd.Wait()
+	wg.Wait()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return waitErr
+}
+
+type lockedWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (w *lockedWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.w.Write(p)
 }
 
 func runHost(ctx context.Context, name string, args ...string) (CommandResult, error) {
