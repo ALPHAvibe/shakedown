@@ -21,7 +21,7 @@ type allowedTool struct {
 	Runtime string
 }
 
-func (a *Activities) runPrompt(ctx context.Context, in run.ExecuteInput, prompt string, failure *run.Result) (run.Result, error) {
+func (a *Activities) runPrompt(ctx context.Context, in run.ExecuteInput, prompt string, failure *run.Result, logText func() string) (run.Result, error) {
 	profile := a.profile(a.Config.Roles.Worker, in.Model)
 	client := model.New(profile)
 	tools, err := allowTools(in.GraphDir, in.Workspace, in.Node.Tools)
@@ -53,6 +53,9 @@ func (a *Activities) runPrompt(ctx context.Context, in run.ExecuteInput, prompt 
 	for turn := 0; turn < turns; turn++ {
 		if ctx.Err() != nil {
 			return run.Result{}, ctx.Err()
+		}
+		if logText != nil {
+			messages = setLogMessage(messages, logText())
 		}
 		req := model.ChatRequest{
 			Messages:   messages,

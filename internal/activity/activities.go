@@ -81,16 +81,20 @@ func (a *Activities) Execute(ctx context.Context, in run.ExecuteInput) (run.Resu
 	stop := startHeartbeat(ctx)
 	defer stop()
 	started := time.Now()
+	caps, stopLogs := a.startLogWatches(ctx, in)
+	defer stopLogs()
+	snapshot := func() string { return a.logSection(caps) }
 	var (
 		res run.Result
 		err error
 	)
 	if in.Node.PromptBody != "" {
-		res, err = a.runPrompt(ctx, in, in.Node.PromptBody, nil)
+		res, err = a.runPrompt(ctx, in, in.Node.PromptBody, nil, snapshot)
 	} else {
 		res, err = a.runCommands(ctx, in, in.Node.Run)
+		stopLogs()
 		if err == nil && res.Failed() && in.Node.OnFailBody != "" {
-			classified, cerr := a.runPrompt(ctx, in, in.Node.OnFailBody, &res)
+			classified, cerr := a.runPrompt(ctx, in, in.Node.OnFailBody, &res, snapshot)
 			if cerr != nil {
 				return run.Result{}, cerr
 			}
@@ -101,6 +105,7 @@ func (a *Activities) Execute(ctx context.Context, in run.ExecuteInput) (run.Resu
 	if err != nil {
 		return run.Result{}, err
 	}
+	res = attachLogs(res, caps)
 	res.ExecutionID = in.Node.ID
 	res.Area = in.Node.Area
 	if res.StartedAt.IsZero() {

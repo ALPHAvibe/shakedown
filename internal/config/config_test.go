@@ -59,6 +59,9 @@ func TestMissingFileUsesDefaults(t *testing.T) {
 	if cfg.Supervisor.Chain[0] != "rules" {
 		t.Fatalf("chain = %v", cfg.Supervisor.Chain)
 	}
+	if cfg.Logs.TailLines != DefaultTailLines {
+		t.Fatalf("tail lines = %d", cfg.Logs.TailLines)
+	}
 }
 
 func clearModelEnv(t *testing.T) {

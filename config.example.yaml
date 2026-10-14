@@ -70,3 +70,9 @@ report:
   #   pr_input: pr
 
 artifacts_dir: artifacts
+
+# How many lines of each captured stream are copied into a model prompt.
+# The artifact file keeps the whole capture for this execution. Tail that file
+# directly; there is no separate follow command.
+logs:
+  tail_lines: 200
