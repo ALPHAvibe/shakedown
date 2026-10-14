@@ -1,0 +1,6 @@
+/shakedown
+/reports/
+/artifacts/
+shakedown.yaml
+*.test
+.DS_Store

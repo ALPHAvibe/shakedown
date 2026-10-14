@@ -1,0 +1,7 @@
+schedules:
+  - id: nightly-hello
+    graph: examples/hello/graph.yaml
+    cron: "0 2 * * *"
+    inputs:
+      name: nightly
+    note: Example nightly run against the hello graph

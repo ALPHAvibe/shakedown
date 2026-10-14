@@ -1,0 +1,53 @@
+name: ctl-api-migrations
+inputs:
+  ref:
+    type: string
+    default: main
+  sandbox_org:
+    type: string
+    default: shakedown-sandbox
+rules:
+  - name: sandbox provisioning failed
+    execution: provision-sandbox
+    when: status == "fail" || status == "error"
+    decision: stop
+    reason: nothing downstream can run
+executions:
+  - id: provision-sandbox
+    run: scripts/sandbox-up.sh {{ inputs.sandbox_org }}
+    required: true
+    timeout: 20m
+    next:
+      - to: run-migrations
+  - id: run-migrations
+    area: migrations
+    run:
+      - scripts/reset-db.sh
+      - scripts/migrate.sh {{ inputs.ref }}
+    on_fail: prompts/classify-migration-failure.md
+    tools: [scripts/db-logs.sh]
+    timeout: 30m
+    next:
+      - to: api-smoke
+        when: status == "pass"
+      - to: migration-retry
+        when: status == "fail"
+  - id: migration-retry
+    area: migrations
+    run: scripts/note-retry.sh
+    timeout: 5m
+    next:
+      - to: run-migrations
+  - id: api-smoke
+    run: scripts/api-smoke.sh
+    timeout: 10m
+    next:
+      - to: api-explore
+        when: status == "pass"
+  - id: api-explore
+    prompt: prompts/explore-api.md
+    tools: [scripts/api-call.sh, scripts/diff.sh]
+    timeout: 30m
+teardown:
+  run: scripts/sandbox-down.sh {{ inputs.sandbox_org }}
+  timeout: 10m
