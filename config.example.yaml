@@ -1,0 +1,72 @@
+temporal:
+  address: 127.0.0.1:7233
+  namespace: default
+  task_queue: shakedown
+  ui: http://localhost:8233
+  run_timeout: 24h
+
+# Profiles are OpenAI-compatible. Point them at Ollama, llama.cpp, vLLM,
+# LM Studio, OpenAI, OpenRouter, or anything else that serves /chat/completions.
+models:
+  local:
+    base_url: http://127.0.0.1:11434/v1
+    model: qwen2.5-coder
+    api_key_env: SHAKEDOWN_API_KEY
+    temperature: 0.2
+    max_tokens: 4096
+    timeout: 10m
+    # prompt works with every server. Use json_object, json_schema, or grammar
+    # when the server supports constrained decoding.
+    json_mode: prompt
+    # auto sends OpenAI tool calls and also accepts {"tool","args"} text.
+    # Use text for models that reject the tools field.
+    tool_protocol: auto
+    max_tool_turns: 8
+    decision_style: json
+    token_limit_field: max_tokens
+  openai:
+    base_url: https://api.openai.com/v1
+    model: gpt-4.1-mini
+    api_key_env: OPENAI_API_KEY
+    temperature: 0
+    json_mode: json_schema
+    tool_protocol: openai
+    token_limit_field: max_completion_tokens
+    decision_style: json
+
+roles:
+  worker: local
+  supervisor: local
+
+supervisor:
+  # First confident layer wins. Drop model for rules-only runs.
+  chain: [rules, model]
+  same_execution_failures: 2
+  area_failures: 3
+  max_steps: 100
+  min_confidence: 0
+  jev:
+    enabled: false
+    base_url: ""
+    api_key_env: JEV_API_KEY
+    decide_path: /decide
+    min_confidence: 0.6
+    timeout: 30s
+
+runner:
+  kind: local
+  # kind: docker
+  # docker_image: alpine:3.20
+  secret_env: []
+
+report:
+  dir: reports
+  sinks: []
+  # - kind: slack
+  #   webhook_env: SLACK_WEBHOOK_URL
+  # - kind: github
+  #   token_env: GITHUB_TOKEN
+  #   repo: org/repo
+  #   pr_input: pr
+
+artifacts_dir: artifacts

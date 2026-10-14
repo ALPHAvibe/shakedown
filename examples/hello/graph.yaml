@@ -1,0 +1,9 @@
+name: hello
+inputs:
+  name:
+    type: string
+    default: shakedown
+executions:
+  - id: greet
+    run: scripts/greet.sh {{ inputs.name }}
+    timeout: 1m
